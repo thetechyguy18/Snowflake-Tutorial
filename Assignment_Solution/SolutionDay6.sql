@@ -1,0 +1,259 @@
+--> Phase-1: Time Travel Operations (OFFSET and TIMESTAMP)
+
+-- 1st on Querying Historical States with OFFSET
+
+-- Task 1:
+-- Query ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS at 30 minutes in the past using AT with OFFSET
+SELECT * 
+FROM ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS
+AT (OFFSET => -60 * 30)
+ORDER BY ID DESC;
+
+-- 2nd on Point-in-Time Querying with TIMESTAMP
+
+-- Task 2:
+-- Query ASSIGNMENT_DB.STAGING.STG_ORDERS as it existed at a specific timestamp ('2026-09-27 10:00:00') using AT with TIMESTAMP
+SELECT * 
+FROM ASSIGNMENT_DB.STAGING.STG_ORDERS
+AT (TIMESTAMP => '2026-09-27 10:00:00'::TIMESTAMP);
+
+-- 3rd on Delta Analysis using BEFORE
+
+-- Task 3:
+-- Query ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS immediately before a specific timestamp using the BEFORE clause
+SELECT * 
+FROM ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS
+BEFORE (TIMESTAMP => '2026-09-28 00:54:00'::TIMESTAMP);
+
+-- Task 4:
+-- Capture the QUERY_ID of a destructive statement (UPDATE or DELETE) and use BEFORE (STATEMENT => '<query_id>') to inspect the data right before that execution
+-- Step A: Run a sample update and capture query ID
+UPDATE ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS SET ORDER_QTY = 0 WHERE ITEM = 'LAPTOP';
+SET LAST_QID = LAST_QUERY_ID();
+
+-- Step B: Query state immediately prior to that execution
+SELECT * 
+FROM ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS
+BEFORE (STATEMENT => $LAST_QID);
+
+--> Phase-2: Object Recovery (DROP and UNDROP)
+
+-- 1st on Dropping Objects
+
+-- Task 1:
+-- Drop the table ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS
+DROP TABLE ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS;
+
+-- Task 2:
+-- Verify that querying the dropped table now returns an object does not exist error
+SELECT * FROM ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS;
+
+-- 2nd on Restoring Dropped Objects
+
+-- Task 3:
+-- Restore the dropped table using UNDROP TABLE
+UNDROP TABLE ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS;
+
+-- Task 4:
+-- Query the restored table to verify complete metadata and record recovery
+SELECT * FROM ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS;
+
+-- 3rd on Schema-Level Lifecycle
+
+-- Task 5:
+-- Create a dummy schema ASSIGNMENT_DB.TEMP_SCHEMA, drop the entire schema, verify it is inaccessible, and restore it using UNDROP SCHEMA
+CREATE SCHEMA IF NOT EXISTS ASSIGNMENT_DB.TEMP_SCHEMA;
+DROP SCHEMA ASSIGNMENT_DB.TEMP_SCHEMA;
+SHOW SCHEMAS LIKE 'TEMP_SCHEMA' IN DATABASE ASSIGNMENT_DB;
+UNDROP SCHEMA ASSIGNMENT_DB.TEMP_SCHEMA;
+
+--> Phase-3: Zero-Copy Cloning across Environments
+
+-- 1st on Environment Setup
+
+-- Task 1:
+-- Create two distinct schemas: ASSIGNMENT_DB.PROD and ASSIGNMENT_DB.DEV
+CREATE SCHEMA IF NOT EXISTS ASSIGNMENT_DB.PROD;
+CREATE SCHEMA IF NOT EXISTS ASSIGNMENT_DB.DEV;
+
+-- 2nd on Table-Level Zero-Copy Cloning
+
+-- Task 2:
+-- Clone the staging table STG_ORDERS into ASSIGNMENT_DB.PROD.PROD_ORDERS without data movement
+CREATE OR REPLACE TABLE ASSIGNMENT_DB.PROD.PROD_ORDERS
+CLONE ASSIGNMENT_DB.STAGING.STG_ORDERS;
+
+-- Task 3:
+-- Create a zero-copy clone of ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS
+CREATE OR REPLACE TABLE ASSIGNMENT_DB.DEV.DEV_ORDERS
+CLONE ASSIGNMENT_DB.PROD.PROD_ORDERS;
+
+-- 3rd on Independent Mutation Verification
+
+-- Task 4:
+-- Compare row counts of both PROD_ORDERS and DEV_ORDERS to confirm initial state parity
+SELECT COUNT(*) AS PROD_COUNT FROM ASSIGNMENT_DB.PROD.PROD_ORDERS;
+SELECT COUNT(*) AS DEV_COUNT  FROM ASSIGNMENT_DB.DEV.DEV_ORDERS;
+
+-- Task 5:
+-- Delete records where ITEM = 'MONITOR' from ASSIGNMENT_DB.DEV.DEV_ORDERS
+DELETE FROM ASSIGNMENT_DB.DEV.DEV_ORDERS
+WHERE ITEM = 'MONITOR';
+
+-- Task 6:
+-- Verify that record deletion in DEV_ORDERS did not affect ASSIGNMENT_DB.PROD.PROD_ORDERS
+SELECT COUNT(*) AS DEV_COUNT_AFTER_DELETE FROM ASSIGNMENT_DB.DEV.DEV_ORDERS;
+SELECT COUNT(*) AS PROD_COUNT_AFTER_DELETE FROM ASSIGNMENT_DB.PROD.PROD_ORDERS;
+
+-- Task 7:
+-- Insert new test records into ASSIGNMENT_DB.DEV.DEV_ORDERS and verify partition isolation between DEV and PROD
+INSERT INTO ASSIGNMENT_DB.DEV.DEV_ORDERS (ORDER_DATE, REGION, ITEM, ORDER_QTY)
+VALUES ('2026-09-28', 'APAC', 'KEYBOARD', 150);
+
+SELECT COUNT(*) AS DEV_FINAL_COUNT FROM ASSIGNMENT_DB.DEV.DEV_ORDERS;
+SELECT COUNT(*) AS PROD_FINAL_COUNT FROM ASSIGNMENT_DB.PROD.PROD_ORDERS;
+
+-- 4th on Schema-Level Cloning
+
+-- Task 8:
+-- Clone the entire schema ASSIGNMENT_DB.PROD to create ASSIGNMENT_DB.STAGE_CLONE and inspect all cloned tables and views
+CREATE OR REPLACE SCHEMA ASSIGNMENT_DB.STAGE_CLONE
+CLONE ASSIGNMENT_DB.PROD;
+
+SHOW TABLES IN SCHEMA ASSIGNMENT_DB.STAGE_CLONE;
+
+--> Phase-4: Combining Zero-Copy Cloning with Time Travel
+
+-- 1st on Historical Table Cloning
+
+-- Task 1:
+-- Clone ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS_HISTORICAL at an offset of 5 minutes in the past (AT OFFSET => -60 * 5)
+CREATE OR REPLACE TABLE ASSIGNMENT_DB.DEV.DEV_ORDERS_HISTORICAL
+CLONE ASSIGNMENT_DB.PROD.PROD_ORDERS
+AT (OFFSET => -60 * 5);
+
+-- Task 2:
+-- Clone ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS_RECOVERED immediately before a recorded batch update timestamp (BEFORE TIMESTAMP)
+CREATE OR REPLACE TABLE ASSIGNMENT_DB.DEV.DEV_ORDERS_RECOVERED
+CLONE ASSIGNMENT_DB.PROD.PROD_ORDERS
+BEFORE (TIMESTAMP => '2026-09-28 01:00:00'::TIMESTAMP);
+
+-- Task 3:
+-- Verify and compare the row counts among current PROD, current DEV, and the historically cloned tables
+SELECT 'PROD_ORDERS' AS TABLE_NAME, COUNT(*) AS TOTAL_ROWS FROM ASSIGNMENT_DB.PROD.PROD_ORDERS
+UNION ALL
+SELECT 'DEV_ORDERS', COUNT(*) FROM ASSIGNMENT_DB.DEV.DEV_ORDERS
+UNION ALL
+SELECT 'DEV_ORDERS_HISTORICAL', COUNT(*) FROM ASSIGNMENT_DB.DEV.DEV_ORDERS_HISTORICAL
+UNION ALL
+SELECT 'DEV_ORDERS_RECOVERED', COUNT(*) FROM ASSIGNMENT_DB.DEV.DEV_ORDERS_RECOVERED;
+
+--> Phase-5: Role-Based Access Control (RBAC) Architecture
+
+-- 1st on Custom Role Creation
+
+-- Task 1:
+-- Switch to the ACCOUNTADMIN role
+USE ROLE ACCOUNTADMIN;
+
+-- Task 2:
+-- Create a custom functional role named ANALYTICS_READER_ROLE
+CREATE ROLE IF NOT EXISTS ANALYTICS_READER_ROLE;
+
+-- 2nd on Privilege Inheritance Hierarchy
+
+-- Task 3:
+-- Grant USAGE privilege on ASSIGNMENT_DB to ANALYTICS_READER_ROLE
+GRANT USAGE 
+ON DATABASE ASSIGNMENT_DB 
+TO ROLE ANALYTICS_READER_ROLE;
+
+-- Task 4:
+-- Grant USAGE privilege on schema ASSIGNMENT_DB.STAGING to ANALYTICS_READER_ROLE
+GRANT USAGE 
+ON SCHEMA ASSIGNMENT_DB.STAGING 
+TO ROLE ANALYTICS_READER_ROLE;
+
+-- Task 5:
+-- Grant SELECT privilege on ALL existing tables in ASSIGNMENT_DB.STAGING to ANALYTICS_READER_ROLE
+GRANT SELECT 
+ON ALL TABLES IN SCHEMA ASSIGNMENT_DB.STAGING 
+TO ROLE ANALYTICS_READER_ROLE;
+
+-- Task 6:
+-- Grant SELECT privilege on all FUTURE tables in ASSIGNMENT_DB.STAGING to ensure automatic read access on upcoming pipelines
+GRANT SELECT 
+ON FUTURE TABLES IN SCHEMA ASSIGNMENT_DB.STAGING 
+TO ROLE ANALYTICS_READER_ROLE;
+
+-- 3rd on Role Assignment and Hierarchy
+
+-- Task 7:
+-- Grant ANALYTICS_READER_ROLE to the system-defined role SYSADMIN to maintain top-down administrative access
+GRANT ROLE ANALYTICS_READER_ROLE 
+TO ROLE SYSADMIN;
+
+-- Task 8:
+-- Create a test user DATA_CONSUMER_USER and grant ANALYTICS_READER_ROLE to this user
+CREATE USER IF NOT EXISTS DATA_CONSUMER_USER
+PASSWORD = 'Password123!'
+DEFAULT_ROLE = ANALYTICS_READER_ROLE;
+
+GRANT ROLE ANALYTICS_READER_ROLE 
+TO USER DATA_CONSUMER_USER;
+
+-- Task 9:
+-- Show all grants assigned to ANALYTICS_READER_ROLE to audit effective permissions
+SHOW GRANTS TO ROLE ANALYTICS_READER_ROLE;
+
+--> Phase-6: Ownership vs Privileges & DDL Permissions
+
+-- 1st on Testing Read-Only Boundaries
+
+-- Task 1:
+-- Switch the active session role to ANALYTICS_READER_ROLE
+USE ROLE ANALYTICS_READER_ROLE;
+
+-- Task 2:
+-- Query ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS to verify SELECT access works
+SELECT * 
+FROM ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS 
+LIMIT 10;
+
+-- Task 3:
+-- Attempt to execute a DROP TABLE statement on ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS and verify the permission denied failure
+DROP TABLE ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS;
+-- Expected Outcome: SQL compilation error: Insufficient privileges to operate on table 'MERGE_TARGET_ORDERS'
+
+-- Task 4:
+-- Attempt to execute a CREATE TABLE statement in ASSIGNMENT_DB.STAGING and verify the authorization failure
+CREATE TABLE ASSIGNMENT_DB.STAGING.UNAUTHORIZED_TEST (ID INT);
+-- Expected Outcome: SQL compilation error: Insufficient privileges to operate on schema 'STAGING'
+
+-- 2nd on Ownership Transfer and Elevated Rights
+
+-- Task 5:
+-- Switch back to ACCOUNTADMIN and transfer OWNERSHIP of ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS to ANALYTICS_READER_ROLE (with COPY CURRENT GRANTS)
+USE ROLE ACCOUNTADMIN;
+
+GRANT OWNERSHIP 
+ON TABLE ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS 
+TO ROLE ANALYTICS_READER_ROLE 
+COPY CURRENT GRANTS;
+
+-- Task 6:
+-- Switch to ANALYTICS_READER_ROLE and alter the table by adding a new column AUDIT_FLAG (STRING) to demonstrate table ownership powers
+USE ROLE ANALYTICS_READER_ROLE;
+
+ALTER TABLE ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS 
+ADD COLUMN AUDIT_FLAG STRING;
+
+-- Task 7:
+-- Revoke OWNERSHIP and re-assign it back to the original administering role (SYSADMIN)
+USE ROLE ACCOUNTADMIN;
+
+GRANT OWNERSHIP 
+ON TABLE ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS 
+TO ROLE SYSADMIN 
+COPY CURRENT GRANTS;
+

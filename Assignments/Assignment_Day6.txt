@@ -1,0 +1,154 @@
+```sql
+--> Phase-1: Time Travel Operations (OFFSET and TIMESTAMP)
+
+-- 1st on Querying Historical States with OFFSET
+
+-- Task 1:
+-- Query ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS at 30 minutes in the past using AT with OFFSET
+
+-- 2nd on Point-in-Time Querying with TIMESTAMP
+
+-- Task 2:
+-- Query ASSIGNMENT_DB.STAGING.STG_ORDERS as it existed at a specific timestamp ('2026-09-27 10:00:00') using AT with TIMESTAMP
+
+-- 3rd on Delta Analysis using BEFORE
+
+-- Task 3:
+-- Query ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS immediately before a specific timestamp using the BEFORE clause
+
+-- Task 4:
+-- Capture the QUERY_ID of a destructive statement (UPDATE or DELETE) and use BEFORE (STATEMENT => '<query_id>') to inspect the data right before that execution
+
+--> Phase-2: Object Recovery (DROP and UNDROP)
+
+-- 1st on Dropping Objects
+
+-- Task 1:
+-- Drop the table ASSIGNMENT_DB.STAGING.FILTERED_ITEMS_ORDERS
+
+-- Task 2:
+-- Verify that querying the dropped table now returns an object does not exist error
+
+-- 2nd on Restoring Dropped Objects
+
+-- Task 3:
+-- Restore the dropped table using UNDROP TABLE
+
+-- Task 4:
+-- Query the restored table to verify complete metadata and record recovery
+
+-- 3rd on Schema-Level Lifecycle
+
+-- Task 5:
+-- Create a dummy schema ASSIGNMENT_DB.TEMP_SCHEMA, drop the entire schema, verify it is inaccessible, and restore it using UNDROP SCHEMA
+
+--> Phase-3: Zero-Copy Cloning across Environments
+
+-- 1st on Environment Setup
+
+-- Task 1:
+-- Create two distinct schemas: ASSIGNMENT_DB.PROD and ASSIGNMENT_DB.DEV
+
+-- 2nd on Table-Level Zero-Copy Cloning
+
+-- Task 2:
+-- Clone the staging table STG_ORDERS into ASSIGNMENT_DB.PROD.PROD_ORDERS without data movement
+
+-- Task 3:
+-- Create a zero-copy clone of ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS
+
+-- 3rd on Independent Mutation Verification
+
+-- Task 4:
+-- Compare row counts of both PROD_ORDERS and DEV_ORDERS to confirm initial state parity
+
+-- Task 5:
+-- Delete records where ITEM = 'MONITOR' from ASSIGNMENT_DB.DEV.DEV_ORDERS
+
+-- Task 6:
+-- Verify that record deletion in DEV_ORDERS did not affect ASSIGNMENT_DB.PROD.PROD_ORDERS
+
+-- Task 7:
+-- Insert new test records into ASSIGNMENT_DB.DEV.DEV_ORDERS and verify partition isolation between DEV and PROD
+
+-- 4th on Schema-Level Cloning
+
+-- Task 8:
+-- Clone the entire schema ASSIGNMENT_DB.PROD to create ASSIGNMENT_DB.STAGE_CLONE and inspect all cloned tables and views
+
+--> Phase-4: Combining Zero-Copy Cloning with Time Travel
+
+-- 1st on Historical Table Cloning
+
+-- Task 1:
+-- Clone ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS_HISTORICAL at an offset of 5 minutes in the past (AT OFFSET => -60 * 5)
+
+-- Task 2:
+-- Clone ASSIGNMENT_DB.PROD.PROD_ORDERS into ASSIGNMENT_DB.DEV.DEV_ORDERS_RECOVERED immediately before a recorded batch update timestamp (BEFORE TIMESTAMP)
+
+-- Task 3:
+-- Verify and compare the row counts among current PROD, current DEV, and the historically cloned tables
+
+--> Phase-5: Role-Based Access Control (RBAC) Architecture
+
+-- 1st on Custom Role Creation
+
+-- Task 1:
+-- Switch to the ACCOUNTADMIN role
+
+-- Task 2:
+-- Create a custom functional role named ANALYTICS_READER_ROLE
+
+-- 2nd on Privilege Inheritance Hierarchy
+
+-- Task 3:
+-- Grant USAGE privilege on ASSIGNMENT_DB to ANALYTICS_READER_ROLE
+
+-- Task 4:
+-- Grant USAGE privilege on schema ASSIGNMENT_DB.STAGING to ANALYTICS_READER_ROLE
+
+-- Task 5:
+-- Grant SELECT privilege on ALL existing tables in ASSIGNMENT_DB.STAGING to ANALYTICS_READER_ROLE
+
+-- Task 6:
+-- Grant SELECT privilege on all FUTURE tables in ASSIGNMENT_DB.STAGING to ensure automatic read access on upcoming pipelines
+
+-- 3rd on Role Assignment and Hierarchy
+
+-- Task 7:
+-- Grant ANALYTICS_READER_ROLE to the system-defined role SYSADMIN to maintain top-down administrative access
+
+-- Task 8:
+-- Create a test user DATA_CONSUMER_USER and grant ANALYTICS_READER_ROLE to this user
+
+-- Task 9:
+-- Show all grants assigned to ANALYTICS_READER_ROLE to audit effective permissions
+
+--> Phase-6: Ownership vs Privileges & DDL Permissions
+
+-- 1st on Testing Read-Only Boundaries
+
+-- Task 1:
+-- Switch the active session role to ANALYTICS_READER_ROLE
+
+-- Task 2:
+-- Query ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS to verify SELECT access works
+
+-- Task 3:
+-- Attempt to execute a DROP TABLE statement on ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS and verify the permission denied failure
+
+-- Task 4:
+-- Attempt to execute a CREATE TABLE statement in ASSIGNMENT_DB.STAGING and verify the authorization failure
+
+-- 2nd on Ownership Transfer and Elevated Rights
+
+-- Task 5:
+-- Switch back to ACCOUNTADMIN and transfer OWNERSHIP of ASSIGNMENT_DB.STAGING.MERGE_TARGET_ORDERS to ANALYTICS_READER_ROLE (with COPY CURRENT GRANTS)
+
+-- Task 6:
+-- Switch to ANALYTICS_READER_ROLE and alter the table by adding a new column AUDIT_FLAG (STRING) to demonstrate table ownership powers
+
+-- Task 7:
+-- Revoke OWNERSHIP and re-assign it back to the original administering role (SYSADMIN)
+
+```

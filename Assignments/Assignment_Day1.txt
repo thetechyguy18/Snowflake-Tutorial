@@ -1,0 +1,82 @@
+```sql
+--> Phase-1: Database and Schema Management
+
+-- 1st on Database Creation and Context Setting
+
+-- Task 1:
+-- Create a new Database ASSIGNMENT_DB if it does not already exist
+
+-- Task 2:
+-- Set ASSIGNMENT_DB as the current active database
+
+-- 2nd on Schema Creation and Context Setting
+
+-- Task 3:
+-- Create a new Schema STAGING inside ASSIGNMENT_DB if it does not already exist
+
+-- Task 4:
+-- Set ASSIGNMENT_DB.STAGING as the current active schema
+
+-- Task 5:
+-- Query a table CUSTOMERS without using the fully qualified name (ASSIGNMENT_DB.STAGING.CUSTOMERS)
+
+-- Task 6:
+-- Check the current database in the session
+
+-- Task 7:
+-- Check the current schema in the session
+
+--> Phase-2: Virtual Warehouse Lifecycle and Configuration
+
+-- 1st on Warehouse Provisioning
+
+-- Task 1:
+-- Create a new Warehouse ANALYTICS_WH with size X-SMALL, auto-suspend of 300 seconds, auto-resume enabled, and initially suspended
+
+-- Task 2:
+-- Set ANALYTICS_WH as the current active warehouse
+
+-- Task 3:
+-- Check whether ANALYTICS_WH is the current active warehouse
+
+-- 2nd on Session Context Verification
+
+-- Task 4:
+-- Check the current user in the session
+
+-- Task 5:
+-- Check the current role in the session
+
+-- Task 6:
+-- Check the current database, current schema, and current warehouse all together
+
+-- 3rd on Altering Warehouse Properties
+
+-- Task 7:
+-- Resize the warehouse ANALYTICS_WH to LARGE
+
+-- Task 8:
+-- Disable auto-suspend on ANALYTICS_WH
+
+-- Task 9:
+-- Manually resume the warehouse ANALYTICS_WH
+
+-- Task 10:
+-- Manually resume ANALYTICS_WH only if it is suspended
+
+-- Task 11:
+-- Manually suspend the warehouse ANALYTICS_WH
+
+--> Phase-3: Warehouse Monitoring and Metadata Inspection
+
+-- Task 1:
+-- Show all warehouses available in the account
+
+-- Task 2:
+-- Check the state and metadata of all warehouses
+
+-- Task 3:
+-- Filter and display only the warehouse ANALYTICS_WH using pattern matching
+
+-- Task 4:
+-- Describe the properties and parameters of ANALYTICS_WH

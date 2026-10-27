@@ -1,0 +1,103 @@
+--> Phase-1: CTAS (Create Table As Select) and QUALIFY Clause
+
+-- 1st on Aggregation with CTAS
+
+-- Task 1:
+-- Create a aggregated table TOTAL_ORDERS_ITEMS inside ASSIGNMENT_DB.STAGING by grouping ITEM and calculating sum of ORDER_QTY as TOTAL_QTY from STG_ORDERS using CTAS
+
+-- 2nd on Window Filtering using QUALIFY
+
+-- Task 2:
+-- Query ITEM, TOTAL_QTY, and compute RANK() ordered by TOTAL_QTY descending, filtering directly for rank > 3 using the QUALIFY clause
+
+--> Phase-2: Data Pipeline Preparation (Staging vs Target)
+
+-- 1st on Staging Table with Surrogate Key
+
+-- Task 1:
+-- Create a table MERGE_STAGING_ORDERS inside ASSIGNMENT_DB.STAGING containing an auto-generated ID using ROW_NUMBER() OVER (ORDER BY ORDER_DATE) and all columns from STG_ORDERS
+
+-- 2nd on Target Table Shell (Empty Table Creation)
+
+-- Task 2:
+-- Create an empty target table MERGE_TARGET_ORDERS with the exact same structure as MERGE_STAGING_ORDERS using a FALSE condition (WHERE 1 = 2)
+
+-- Task 3:
+-- Verify that MERGE_TARGET_ORDERS is created with 0 rows
+
+-- 3rd on Audit Column Tracking
+
+-- Task 4:
+-- Add an audit column UPDATED_AT of type TIMESTAMP_NTZ to MERGE_TARGET_ORDERS to track record processing timestamps
+
+--> Phase-3: Incremental Loading and Upsert using MERGE
+
+-- 1st on Initial Full Load via MERGE
+
+-- Task 1:
+-- Perform an initial MERGE from MERGE_STAGING_ORDERS into MERGE_TARGET_ORDERS matching on ID, updating existing rows and inserting non-matching rows with CURRENT_TIMESTAMP()
+
+-- Task 2:
+-- Verify all records loaded into MERGE_TARGET_ORDERS
+
+-- 2nd on Updating Source Records and Re-Merging
+
+-- Task 3:
+-- Update ORDER_QTY for records with ID in (1, 2, 3) in MERGE_STAGING_ORDERS
+
+-- Task 4:
+-- Confirm the modified rows in MERGE_STAGING_ORDERS
+
+-- Task 5:
+-- Run the MERGE statement again and verify that existing rows are updated with the latest UPDATED_AT timestamp without creating duplicates
+
+-- 3rd on Inserting New Rows and Re-Merging (Full Upsert)
+
+-- Task 6:
+-- Insert 4 new records into MERGE_STAGING_ORDERS with higher IDs
+
+-- Task 7:
+-- Run the MERGE statement again to execute simultaneous UPDATE of existing records and INSERT of new records
+
+-- Task 8:
+-- Query MERGE_TARGET_ORDERS ordered by ID descending and UPDATED_AT descending to confirm the upserted data
+
+--> Phase-4: Atomic Replacement using INSERT OVERWRITE
+
+-- 1st on Baseline Table Creation
+
+-- Task 1:
+-- Create a table FILTERED_ITEMS_ORDERS containing records from STG_ORDERS where ITEM = 'MONITOR' using CTAS
+
+-- Task 2:
+-- Query FILTERED_ITEMS_ORDERS to verify baseline data
+
+-- 2nd on Atomic Replacement (Single Transaction)
+
+-- Task 3:
+-- Use INSERT OVERWRITE on FILTERED_ITEMS_ORDERS to completely replace its data with records from STG_ORDERS where ITEM = 'LAPTOP'
+
+-- Task 4:
+-- Verify that all previous 'MONITOR' records were wiped out and replaced strictly with 'LAPTOP' data in a single atomic transaction
+
+--> Phase-5: Micro-Partition Clustering and Cache Architecture
+
+-- 1st on Cluster Keys
+
+-- Task 1:
+-- Create a table CLUSTERED_ORDERS inside ASSIGNMENT_DB.STAGING clustered by (REGION) using CTAS from STG_ORDERS
+
+-- Task 2:
+-- Inspect the clustering depth and partition health using SYSTEM$CLUSTERING_INFORMATION('ASSIGNMENT_DB.STAGING.CLUSTERED_ORDERS')
+
+-- 2nd on Cache Architecture Verification
+
+-- Task 3:
+-- Execute an aggregation query computing total ORDER_QTY grouped by ITEM twice to observe Query Result Cache reuse in Query History
+
+-- Task 4:
+-- Explain the difference in lifecycle and persistence between:
+-- 1. Result Cache (Cloud Services layer - 24 hours)
+-- 2. Local Disk / Warehouse Cache (SSD cache on active warehouse clusters)
+-- 3. Metadata Cache (Cloud Services layer object catalog stats)
+
